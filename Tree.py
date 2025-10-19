@@ -38,13 +38,25 @@ class Node:
     def amountChildren(self):
         return len(self.children)
 
+    def amountActiveChildren(self):
+        return len(self.getActiveChidren())
+
     def setValue(self, new_value, key):
         self.value[key] = new_value
 
+    def getValue(self, key):
+        return self.value[key]
+
     def setChildren(self, children):
+        if not self.isActive():
+            return None
+
         self.children = children
 
     def addChild(self, SpecificNode=None):
+        if not self.isActive():
+            return None
+
         if SpecificNode is None:
             SpecificNode = Node
         child_location = self.location.addLocation(len(self.children))
@@ -60,12 +72,42 @@ class Node:
             inspect_child = self.children[location.currentIndex()]
             return inspect_child.getChild(location.getNext())
 
-    def recursive_call(self, function, *args, **kwargs):
-        children_calls = []
-        for child in self.children:
-            children_calls.append(child.recursive_call(function, *args, **kwargs))
+    def isActive(self):
+        return self.value["Trigger"]
 
-        return function(itself=self, children_outputs=children_calls, *args, **kwargs)
+    def getActiveChidren(self):
+        return [x for x in self.children if x.isActive()]
+
+    def getFilteredChildren(self, boolfunc=None, *args, **kwargs):
+        #print(args)
+        #print(kwargs)
+        if boolfunc is None:
+            return self.children
+
+        return [x for x in self.children if boolfunc(x.value, *args, **kwargs)]
+
+    def setOff(self):
+        self.value["Trigger"] = False
+
+    def setOn(self):
+        self.value["Trigger"] = True
+
+    def recursive_call(self, function, function_args={}, filter_function=None, filtering_args={}, count_inactive=False, current_node=None,*args, **kwargs):
+        children_calls = []
+        for child in self.getFilteredChildren(filter_function, **filtering_args):
+            if child.isActive() is True or count_inactive:
+                if current_node is not None:
+                    new_child = current_node.addChild()
+                else:
+                    new_child=None
+                children_calls.append(child.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, new_child, *args, **kwargs))
+
+        fout = function(itself=self, children_outputs=children_calls, node=current_node, **function_args)
+        if isinstance(fout, tuple):
+            fout, cache = fout
+            if current_node is not None:
+                current_node.setValue(cache, "Cache")
+        return fout
 
 class CallableNode(Node):
     def __init__(self, location, framework):
@@ -80,11 +122,119 @@ class CallableNode(Node):
 class Tree:
     def __init__(self, value_framework, SpecificNode=Node):
         self.value_framework = value_framework.copy()
-        self.main_node = SpecificNode(Location([]), value_framework)
+        self.value_framework["Trigger"] = True
+        self.value_framework["Type"] = ""
+        self.main_node = SpecificNode(Location([]), self.value_framework)
 
     def findNode(self, location_raw):
         loc = Location(location_raw)
         return self.main_node.getChild(loc)
+
+    def recursiveCall(self, function, location_raw=[], function_args={}, filter_function=None, filtering_args={}, count_inactive=False):
+        node = self.findNode(location_raw)
+        cache_framework = {
+            "Cache": None,
+        }
+        tree = Tree(cache_framework)
+        current_node = tree.main_node
+        return node.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, current_node), tree
+
+    class Filtering:
+        @staticmethod
+        # EQUALITY NODE METHODS
+        def valueEquality(dict_obj, key, value):
+            if dict_obj[key] == value:
+                return True
+            else:
+                return False
+
+    class Recursion:
+
+        @staticmethod
+        def getLeafValues(keys, **kwargs):
+            node_obj = kwargs["itself"]
+            children_outputs = kwargs["children_outputs"]
+
+            dict_return = {}
+            for key in keys:
+                if len(children_outputs) == 0:
+                    dict_return[key] = [node_obj.value[key]]
+                else:
+                    values_list = []
+                    for child_dict in children_outputs:
+                        values_list = values_list + child_dict[key]
+
+                    dict_return[key] = values_list
+
+            return dict_return
+
+        @staticmethod
+        def getAllValues(keys, **kwargs):
+            dict_return = {}
+            for key in keys:
+                node_obj = kwargs["itself"]
+                children_outputs = kwargs["children_outputs"]
+                if len(children_outputs) == 0:
+                    dict_return[key] = [node_obj.value[key]]
+                else:
+                    values_list = []
+                    for child_dict in children_outputs:
+                        values_list = values_list + child_dict[key]
+
+                    values_list.append(node_obj.value[key])
+
+                    dict_return[key] = values_list
+
+            return dict_return
+
+        @staticmethod
+        def getAmountChildren(**kwargs):
+            node_obj = kwargs["itself"]
+            children_outputs = kwargs["children_outputs"]
+
+            if len(children_outputs) == 0:
+                return 1
+            else:
+                value = 1
+                for val in children_outputs:
+                    value += val
+
+            return value
+
+        @staticmethod
+        def getAmountChildren(**kwargs):
+            children_outputs = kwargs["children_outputs"]
+
+            if len(children_outputs) == 0:
+                return 1
+            else:
+                value = 1
+                for val in children_outputs:
+                    value += val
+
+            return value
+
+        @staticmethod
+        def getMaxDepth(**kwargs):
+            node_obj = kwargs["itself"]
+            children_outputs = kwargs["children_outputs"]
+
+            if len(children_outputs) == 0:
+                return 0
+            else:
+                value = max(children_outputs) + 1
+
+            return value
+
+"""
+class Sequence(Tree):
+    def __init__(self, value_framework, SpecificNode=Node):
+        super().__init__(value_framework, SpecificNode)
+
+class SequenceNode(Node):
+    def __init__(self, location, framework):
+        super().__init__(location, framework)
+"""
 
 class FunctionTree(Tree):
     def __init__(self, function):
@@ -115,42 +265,6 @@ def exp_summation(num, **kwargs):
         new_child1 = parent.addChild(CallableNode)
         new_child2 = parent.addChild(CallableNode)
         return new_child2(num - 2) + new_child1(num - 1)
-
-
-def getLeafValues(keys, **kwargs):
-    dict_return = {}
-    for key in keys:
-        node_obj = kwargs["itself"]
-        children_outputs = kwargs["children_outputs"]
-        if len(children_outputs) == 0:
-            dict_return[key] = [node_obj.value[key]]
-        else:
-            values_list = []
-            for child_dict in children_outputs:
-                values_list = values_list + child_dict[key]
-
-            dict_return[key] = values_list
-
-    return dict_return
-
-def getAllValues(keys, **kwargs):
-    dict_return = {}
-    for key in keys:
-        node_obj = kwargs["itself"]
-        children_outputs = kwargs["children_outputs"]
-        if len(children_outputs) == 0:
-            dict_return[key] = [node_obj.value[key]]
-        else:
-            values_list = []
-            for child_dict in children_outputs:
-                values_list = values_list + child_dict[key]
-
-            values_list.append(node_obj.value[key])
-
-            dict_return[key] = values_list
-
-    return dict_return
-
 
 
 """
