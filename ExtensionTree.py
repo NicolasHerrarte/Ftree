@@ -8,9 +8,12 @@ from Discrete import *
 
 class EulerTree(FunctionTree):
     def __init__(self):
-        super().__init__(self.GCD_R)
+        super().__init__(self.gcd_r)
+        self.bezoet_tree = None
+        self.gcd = None
+        self.bezoet_coefs = None
 
-    def GCD_R(self, num, **kwargs):
+    def gcd_r(self, num, **kwargs):
         parent = kwargs["parent"]
         if not parent.isActive():
             return num
@@ -37,43 +40,68 @@ class EulerTree(FunctionTree):
 
         return n1
 
-def bezout_coefs(**kwargs):
-    def bezout_next(previous, current, direction):
-        multiplier = previous[direction]
-        swap_coefs = [x * multiplier for x in current]
-        coefs = [0, 0]
-        coefs[not direction] = swap_coefs[1] + previous[not direction]
-        coefs[direction] = swap_coefs[0]
-        return tuple(coefs)
+    def calc_bezout_coefs(self):
+        if self.called:
+            fout, cache_tree = gcdtree.recursiveCall(EulerTree.bezout_coefs_r,
+                                                     filter_function=Tree.Filtering.valueEquality,
+                                                     filtering_args={
+                                                         "key": "Type",
+                                                         "value": "Principal"
+                                                     })
+            self.bezoet_tree = cache_tree
+            self.bezoet_coefs = fout
+            return fout
 
-    node_obj = kwargs["itself"]
-    recursive_node = kwargs["node"]
-    recursive_depth = recursive_node.recursive_call(Tree.Recursion.getMaxDepth)
+    def calc_gcd(self, num1, num2):
+        self((num1, num2))
+        dict_gcd, _ = self.recursiveCall(Tree.Recursion.getLeafValues,
+                                         function_args={
+                                             "keys": ["Value"]
+                                         },
+                                         count_inactive=True)
+        self.gcd = dict_gcd["Value"][0]
+        return self.gcd
+
+    @staticmethod
+    def bezout_coefs_r(**kwargs):
+        def bezout_next(previous, current, direction):
+            multiplier = previous[direction]
+            swap_coefs = [x * multiplier for x in current]
+            coefs = [0, 0]
+            coefs[not direction] = swap_coefs[1] + previous[not direction]
+            coefs[direction] = swap_coefs[0]
+            return tuple(coefs)
+
+        node_obj = kwargs["itself"]
+        recursive_node = kwargs["node"]
+        recursive_depth = recursive_node.recursive_call(Tree.Recursion.getMaxDepth)
 
 
-    coef_node = node_obj.getFilteredChildren(Tree.Filtering.valueEquality, key="Type", value="Coef")[0]
-    coef = coef_node.getValue("Value")
-    current_bezout = (1, coef)
-    #print(node_obj.amountActiveChildren())
-    #print(recursive_depth)
-    if node_obj.amountActiveChildren() > 0:
-        if recursive_depth == 1:
-            direction = False
-            return current_bezout, direction
-        else:
-            previous_bezout = kwargs["children_outputs"][0]
-            direction = not recursive_node.children[0].getValue("Cache")
+        coef_node = node_obj.getFilteredChildren(Tree.Filtering.valueEquality, key="Type", value="Coef")[0]
+        coef = coef_node.getValue("Value")
+        current_bezout = (1, coef)
+        if node_obj.amountActiveChildren() > 0:
+            if recursive_depth == 1:
+                direction = False
+                return current_bezout, direction
+            else:
+                previous_bezout = kwargs["children_outputs"][0]
+                direction = not recursive_node.children[0].getValue("Cache")
 
-            new_bezout = bezout_next(previous_bezout, current_bezout, direction)
-            print("---")
-            print(previous_bezout)
-            print(current_bezout)
-            print(new_bezout)
-            return new_bezout, direction
+                new_bezout = bezout_next(previous_bezout, current_bezout, direction)
+                #print("---")
+                #print(previous_bezout)
+                #print(current_bezout)
+                #print(new_bezout)
+                return new_bezout, direction
 
 
 gcdtree = EulerTree()
-gcdtree((9834, 387))
+gcd = gcdtree.calc_gcd(9834, 387)
+coefs = gcdtree.calc_bezout_coefs()
+print(gcdtree.gcd)
+print(gcdtree.bezoet_coefs)
+
 """
 _all = gcdtree.main_node.recursive_call(Tree.Recursion.getAllValues,
                                         function_args={
@@ -95,6 +123,7 @@ _all2 = gcdtree.recursiveCall(Tree.Recursion.getAllValues,
 #print(gcdtree.findNode(l).value["Value"])
 #print(gcdtree.findNode(l).amountActiveChildren())
 #print("---")
+"""
 fout, cache_tree = gcdtree.recursiveCall(bezout_coefs,
                             filter_function=Tree.Filtering.valueEquality,
                             filtering_args={
@@ -102,3 +131,4 @@ fout, cache_tree = gcdtree.recursiveCall(bezout_coefs,
                                 "value": "Principal"
                             })
 print(fout, cache_tree.findNode([]).getValue("Cache"))
+"""

@@ -243,8 +243,10 @@ class FunctionTree(Tree):
             "Value": None
         }
         super().__init__(fw, CallableNode)
+        self.called = False
 
     def __call__(self, *args, **kwargs):
+        self.called = True
         return self.main_node(*args, **kwargs)
 
 
