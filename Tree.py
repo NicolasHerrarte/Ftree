@@ -235,6 +235,92 @@ class Tree:
 
             return value
 
+        @staticmethod
+        def printNode(value_key, **kwargs):
+            def value_branch(type, value=None, indentation=True, num_spaces=0):
+                branches_dict = {
+                    "UP": " /-",
+                    "BASE": "|",
+                    "BODY": "|--",
+                    "DOWN": " \\-",
+                    "EMPTY": ""
+                }
+
+                s = ""
+
+                s += branches_dict[type]
+                s += " " * num_spaces
+
+                if value is not None:
+                    s += str(value)
+                if indentation:
+                    s += "\n"
+
+                return s
+
+            node_obj = kwargs["itself"]
+            children_outputs = kwargs["children_outputs"]
+
+            if len(children_outputs) == 0:
+                return node_obj.getValue(value_key)
+            else:
+
+                l = children_outputs[::-1]
+                n = len(l)
+                s = ""
+
+                if n > 1:
+
+                    start_line_count = len(str(l[0]).splitlines()) // 2
+                    for i in range(start_line_count):
+                        s += value_branch("EMPTY", value=str(l[0]).splitlines()[i], num_spaces=3)
+                    s += value_branch("UP", str(l[0]).splitlines()[start_line_count])
+                    for i in range(1, start_line_count + 1):
+                        s += value_branch("BASE", value=str(l[0]).splitlines()[start_line_count + i], num_spaces=2)
+
+                    for i in range(1, n - 1):
+                        s += value_branch("BASE")
+
+                        start_line_count = len(str(l[i]).splitlines()) // 2
+                        for j in range(start_line_count):
+                            s += value_branch("BASE", value=str(l[i]).splitlines()[j], num_spaces=2)
+                        s += value_branch("BODY", str(l[i]).splitlines()[start_line_count])
+                        for j in range(1, start_line_count + 1):
+                            s += value_branch("BASE", value=str(l[i]).splitlines()[start_line_count + j], num_spaces=2)
+
+                    s += value_branch("BASE")
+
+                    start_line_count = len(str(l[-1]).splitlines()) // 2
+                    for i in range(start_line_count):
+                        s += value_branch("BASE", value=str(l[-1]).splitlines()[i], num_spaces=2)
+                    s += value_branch("DOWN", str(l[-1]).splitlines()[start_line_count])
+                    for i in range(1, start_line_count + 1):
+                        s += value_branch("EMPTY", value=str(l[-1]).splitlines()[start_line_count + i], num_spaces=3)
+
+                else:
+                    start_line_count = len(str(l[0]).splitlines()) // 2
+                    for i in range(start_line_count):
+                        s += value_branch("EMPTY", value=str(l[0]).splitlines()[i], num_spaces=3)
+                    s += value_branch("BODY", str(l[0]).splitlines()[start_line_count])
+                    for i in range(1, start_line_count + 1):
+                        s += value_branch("EMPTY", value=str(l[0]).splitlines()[start_line_count + i], num_spaces=2)
+
+                c_value = len(s.splitlines()) // 2
+
+                lines = s.splitlines()
+                new_lines = []
+
+                for i, line in enumerate(lines):
+                    add_value = f"{node_obj.getValue(value_key)}--"
+
+                    if i == c_value:
+                        new_line = add_value + line
+                    else:
+                        new_line = " " * len(add_value) + line
+                    new_lines.append(new_line)
+
+                return "\n".join(new_lines)
+
 """
 class Sequence(Tree):
     def __init__(self, value_framework, SpecificNode=Node):

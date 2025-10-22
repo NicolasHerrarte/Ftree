@@ -105,9 +105,9 @@ class EulerTree(FunctionTree):
 
 class ModularNumber():
     def __init__(self, n, modulo):
-        etree = EulerTree()
-        self.gcd = etree.calc_gcd(n, modulo)
-        self.coefs = etree.calc_bezout_coefs()
+        self.etree = EulerTree()
+        self.gcd = self.etree.calc_gcd(n, modulo)
+        self.coefs = self.etree.calc_bezout_coefs()
         self.invertible = (self.gcd == 1)
         self.m_inverse = None
         if self.invertible:
@@ -115,6 +115,12 @@ class ModularNumber():
 
 mod101_4620 = ModularNumber(101,4620)
 print(mod101_4620.m_inverse)
+t = mod101_4620.etree.main_node.recursive_call(Tree.Recursion.printNode,
+                                            function_args={
+                                                "value_key": "Value"
+                                            },
+                                            count_inactive=True)
+print(t)
 
 """
 _all = gcdtree.main_node.recursive_call(Tree.Recursion.getAllValues,
