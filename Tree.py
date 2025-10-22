@@ -1,3 +1,5 @@
+import numpy as np
+
 class Location:
     def __init__(self, location):
         self.location = location
@@ -52,6 +54,10 @@ class Node:
             return None
 
         self.children = children
+
+    def reset(self):
+        self.setChildren([])
+        self.value = self.framework
 
     def addChild(self, SpecificNode=None):
         if not self.isActive():
@@ -129,6 +135,9 @@ class Tree:
     def findNode(self, location_raw):
         loc = Location(location_raw)
         return self.main_node.getChild(loc)
+
+    def reset(self):
+        self.main_node.reset()
 
     def recursiveCall(self, function, location_raw=[], function_args={}, filter_function=None, filtering_args={}, count_inactive=False):
         node = self.findNode(location_raw)
@@ -248,6 +257,31 @@ class FunctionTree(Tree):
     def __call__(self, *args, **kwargs):
         self.called = True
         return self.main_node(*args, **kwargs)
+
+    class Recursion:
+        @staticmethod
+        def generatePermutations(element_list, k, removed_element=None, count=0, **kwargs):
+            if k == count:
+                return np.array([[removed_element]])
+
+            else:
+                parent = kwargs["parent"]
+                children_in_sequence = None
+                for e in element_list:
+                    new_child = parent.addChild(CallableNode)
+                    new_list = [x for x in element_list if x != e]
+                    child_call = new_child(new_list, k, e, count + 1)
+                    if children_in_sequence is None:
+                        children_in_sequence = child_call
+                    else:
+                        children_in_sequence = np.concatenate([children_in_sequence, child_call], axis=1)
+
+                if removed_element is None:
+                    return children_in_sequence
+                else:
+                    removed_array = np.full((1, children_in_sequence.shape[1]), removed_element)
+                    concat_array = np.concatenate([removed_array, children_in_sequence], axis=0)
+                return concat_array
 
 
 def exp(num, **kwargs):

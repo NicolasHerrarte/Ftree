@@ -9,9 +9,11 @@ from Discrete import *
 class EulerTree(FunctionTree):
     def __init__(self):
         super().__init__(self.gcd_r)
-        self.bezoet_tree = None
         self.gcd = None
+        self.gcd_tree = None
         self.bezoet_coefs = None
+        self.bezoet_tree = None
+        self.inverted = False
 
     def gcd_r(self, num, **kwargs):
         parent = kwargs["parent"]
@@ -42,15 +44,21 @@ class EulerTree(FunctionTree):
 
     def calc_bezout_coefs(self):
         if self.called:
-            fout, cache_tree = gcdtree.recursiveCall(EulerTree.bezout_coefs_r,
+            fout, cache_tree = self.recursiveCall(EulerTree.bezout_coefs_r,
                                                      filter_function=Tree.Filtering.valueEquality,
                                                      filtering_args={
                                                          "key": "Type",
                                                          "value": "Principal"
                                                      })
             self.bezoet_tree = cache_tree
-            self.bezoet_coefs = fout
-            return fout
+            invert = cache_tree.findNode([]).getValue("Cache")
+            if invert:
+                final_coefs = (-fout[1], fout[0])
+            else:
+                final_coefs = (fout[0], -fout[1])
+
+            self.bezoet_coefs = final_coefs
+            return final_coefs
 
     def calc_gcd(self, num1, num2):
         self((num1, num2))
@@ -95,12 +103,18 @@ class EulerTree(FunctionTree):
                 #print(new_bezout)
                 return new_bezout, direction
 
+class ModularNumber():
+    def __init__(self, n, modulo):
+        etree = EulerTree()
+        self.gcd = etree.calc_gcd(n, modulo)
+        self.coefs = etree.calc_bezout_coefs()
+        self.invertible = (self.gcd == 1)
+        self.m_inverse = None
+        if self.invertible:
+            self.m_inverse = self.coefs[0]
 
-gcdtree = EulerTree()
-gcd = gcdtree.calc_gcd(9834, 387)
-coefs = gcdtree.calc_bezout_coefs()
-print(gcdtree.gcd)
-print(gcdtree.bezoet_coefs)
+mod101_4620 = ModularNumber(101,4620)
+print(mod101_4620.m_inverse)
 
 """
 _all = gcdtree.main_node.recursive_call(Tree.Recursion.getAllValues,
