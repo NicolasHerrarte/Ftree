@@ -115,7 +115,8 @@ class ModularNumber():
 
 mod101_4620 = ModularNumber(101,4620)
 print(mod101_4620.m_inverse)
-t = mod101_4620.etree.main_node.recursive_call(Tree.Recursion.printNode,
+t, _ = mod101_4620.etree.recursiveCall(Tree.Recursion.printNode,
+                                            location_raw=[],
                                             function_args={
                                                 "value_key": "Value"
                                             },
