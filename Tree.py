@@ -112,6 +112,7 @@ class Node:
         if isinstance(fout, tuple):
             fout, cache = fout
             if current_node is not None:
+                current_node.setValue(fout, "Value")
                 current_node.setValue(cache, "Cache")
         return fout
 
@@ -143,6 +144,7 @@ class Tree:
         node = self.findNode(location_raw)
         cache_framework = {
             "Cache": None,
+            "Value": None
         }
         tree = Tree(cache_framework)
         current_node = tree.main_node

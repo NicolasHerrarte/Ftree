@@ -42,7 +42,7 @@ class EulerTree(FunctionTree):
 
         return n1
 
-    def calc_bezout_coefs(self):
+    def calc_bezout_coefs(self, return_cache=False):
         if self.called:
             fout, cache_tree = self.recursiveCall(EulerTree.bezout_coefs_r,
                                                      filter_function=Tree.Filtering.valueEquality,
@@ -58,7 +58,10 @@ class EulerTree(FunctionTree):
                 final_coefs = (fout[0], -fout[1])
 
             self.bezoet_coefs = final_coefs
-            return final_coefs
+            if return_cache:
+                return final_coefs, cache_tree
+            else:
+                return final_coefs
 
     def calc_gcd(self, num1, num2):
         self((num1, num2))
@@ -104,24 +107,40 @@ class EulerTree(FunctionTree):
                 return new_bezout, direction
 
 class ModularNumber():
-    def __init__(self, n, modulo):
+    def __init__(self, n, modulo, debug=False):
+        self.debug = debug
         self.etree = EulerTree()
+        self.ctree = None
         self.gcd = self.etree.calc_gcd(n, modulo)
-        self.coefs = self.etree.calc_bezout_coefs()
+        bezout_out = self.etree.calc_bezout_coefs(debug)
+        if debug:
+            self.coefs, self.ctree = bezout_out
+        else:
+            self.coefs = bezout_out
         self.invertible = (self.gcd == 1)
         self.m_inverse = None
         if self.invertible:
             self.m_inverse = self.coefs[0]
 
-mod101_4620 = ModularNumber(101,4620)
+mod101_4620 = ModularNumber(101,4620, debug=True)
 print(mod101_4620.m_inverse)
-t, _ = mod101_4620.etree.recursiveCall(Tree.Recursion.printNode,
+str_etree, _ = mod101_4620.etree.recursiveCall(Tree.Recursion.printNode,
                                             location_raw=[],
                                             function_args={
                                                 "value_key": "Value"
                                             },
                                             count_inactive=True)
-print(t)
+ctree = mod101_4620.ctree
+print("---Function Tree---")
+print(str_etree)
+str_ctree, _ = ctree.recursiveCall(Tree.Recursion.printNode,
+                                            location_raw=[],
+                                            function_args={
+                                                "value_key": "Value"
+                                            })
+
+print("---Recursive Function Output Tree---")
+print(str_ctree)
 
 """
 _all = gcdtree.main_node.recursive_call(Tree.Recursion.getAllValues,
