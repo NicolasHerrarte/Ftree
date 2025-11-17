@@ -65,6 +65,7 @@ class Node:
 
         if SpecificNode is None:
             SpecificNode = Node
+
         child_location = self.location.addLocation(len(self.children))
         new_child = SpecificNode(child_location, self.framework)
         self.children.append(new_child)
@@ -99,16 +100,16 @@ class Node:
         self.value["Trigger"] = True
 
     def recursive_call(self, function, function_args={}, filter_function=None, filtering_args={}, count_inactive=False, current_node=None,*args, **kwargs):
-        children_calls = []
+        previous_calls = []
         for child in self.getFilteredChildren(filter_function, **filtering_args):
             if child.isActive() is True or count_inactive:
                 if current_node is not None:
                     new_child = current_node.addChild()
                 else:
                     new_child=None
-                children_calls.append(child.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, new_child, *args, **kwargs))
+                previous_calls.append(child.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, new_child, *args, **kwargs))
 
-        fout = function(itself=self, children_outputs=children_calls, node=current_node, **function_args)
+        fout = function(itself=self, children_outputs=previous_calls, node=current_node, **function_args)
         if isinstance(fout, tuple):
             fout, cache = fout
             if current_node is not None:
@@ -125,6 +126,46 @@ class CallableNode(Node):
         func_return = f(parent=self,*args, **kwargs)
         self.setValue(func_return,"Value")
         return func_return
+
+
+class NaryNode(Node):
+    def __init__(self, location, framework):
+        super().__init__(location, framework)
+        self.setOff()
+
+    def __call__(self, element):
+        self.setOn()
+        self.setValue(element, "Value")
+        for i in range(self.getValue("Nary")):
+            child = self.addChild(NaryNode)
+            #child.setOff()
+
+    def addChild(self, SpecificNode=None):
+        if self.amountChildren() < self.getValue("Nary"):
+            return super().addChild(NaryNode)
+
+    def add_element(self, element):
+        if self.isActive():
+            c = self.framework["Function"]
+            if c(element, self.getValue("Value")) < 0:
+                self.children[0].add_element(element)
+            elif c(element, self.getValue("Value")) > 0:
+                self.children[1].add_element(element)
+        else:
+            self(element)
+
+    def get_element(self, element):
+        if self.isActive():
+            if element == self.getValue("Value"):
+                return True
+
+            c = self.framework["Function"]
+            if c(element, self.getValue("Value")) < 0:
+                return self.children[0].get_element(element)
+            elif c(element, self.getValue("Value")) > 0:
+                return self.children[1].get_element(element)
+        else:
+            return False
 
 class Tree:
     def __init__(self, value_framework, SpecificNode=Node):
@@ -332,6 +373,45 @@ class SequenceNode(Node):
     def __init__(self, location, framework):
         super().__init__(location, framework)
 """
+
+class NaryTree(Tree):
+    def __init__(self, value_framework, n_value):
+        self.n_value = n_value
+        value_framework["Nary"] = n_value
+        super().__init__(value_framework, NaryNode)
+
+class BinarySearchTree(NaryTree):
+    def __init__(self, comparison):
+        fw = {
+            "Function": comparison,
+            "Value": None
+        }
+        super().__init__(fw, 2)
+
+    def addElements(self, elements):
+        if isinstance(elements, list):
+            for x in elements:
+                self.main_node.add_element(x)
+        else:
+            self.main_node.add_element(elements)
+
+    def getElements(self, elements):
+        if isinstance(elements, list):
+            return [self.main_node.get_element(x) for x in elements]
+        else:
+            return self.main_node.get_element(elements)
+
+    class Comparison:
+
+        @staticmethod
+        def greaterThan(a, b):
+            if a > b:
+                return 1
+            elif a < b:
+                return -1
+            else:
+                return 0
+
 
 class FunctionTree(Tree):
     def __init__(self, function):
