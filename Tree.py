@@ -37,6 +37,20 @@ class Node:
         self.location = location
         self.name = "Node_"+location.getString()
 
+    #UNDONE
+    def transferState(self, transfer_node):
+        if self.framework == transfer_node.framework:
+            self.value = transfer_node.value
+            self.children = transfer_node.children
+            self.recalculateChildLocal()
+
+    def recalculateChildLocal(self):
+        for i, child in enumerate(self.children):
+            child_location = self.location.addLocation(i)
+            child.location = child_location
+            child.name = "Node_" + child.location.getString()
+            child.recalculateChildLocal()
+
     def amountChildren(self):
         return len(self.children)
 
@@ -45,6 +59,9 @@ class Node:
 
     def setValue(self, new_value, key):
         self.value[key] = new_value
+
+    def unpackValue(self, key):
+        self.value[key] = self.value[key].unpack()
 
     def getValue(self, key):
         return self.value[key]
@@ -68,6 +85,7 @@ class Node:
 
         child_location = self.location.addLocation(len(self.children))
         new_child = SpecificNode(child_location, self.framework)
+        new_child.setValue(self.getValue("Depth")+1, "Depth")
         self.children.append(new_child)
 
         return new_child
@@ -99,15 +117,36 @@ class Node:
     def setOn(self):
         self.value["Trigger"] = True
 
-    def recursive_call(self, function, function_args={}, filter_function=None, filtering_args={}, count_inactive=False, current_node=None,*args, **kwargs):
+    def recursive_call_forward(self, function, prop_args, function_args={}, filter_function=None, filtering_args={}, count_inactive=False, max_depth=None, current_node=None, *args, **kwargs):
+        fout = function(itself=self, parent_call=prop_args, node=current_node, **function_args)
+
+        for child in self.getFilteredChildren(filter_function, **filtering_args):
+            if child.isActive() is True or count_inactive:
+                if max_depth is None or child.getValue("Depth") <= max_depth:
+                    if current_node is not None:
+                        new_child = current_node.addChild()
+                    else:
+                        new_child=None
+
+                    if isinstance(fout, tuple):
+                        fout, cache = fout
+                        if current_node is not None:
+                            current_node.setValue(fout, "Value")
+                            current_node.setValue(cache, "Cache")
+
+                    child.recursive_call_forward(function, fout, function_args, filter_function, filtering_args, count_inactive, max_depth, new_child, *args, **kwargs)
+
+    def recursive_call(self, function, function_args={}, filter_function=None, filtering_args={}, count_inactive=False, max_depth=None, current_node=None, *args, **kwargs):
         previous_calls = []
         for child in self.getFilteredChildren(filter_function, **filtering_args):
             if child.isActive() is True or count_inactive:
-                if current_node is not None:
-                    new_child = current_node.addChild()
-                else:
-                    new_child=None
-                previous_calls.append(child.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, new_child, *args, **kwargs))
+                if max_depth is None or child.getValue("Depth") <= max_depth:
+                    if current_node is not None:
+                        new_child = current_node.addChild()
+                    else:
+                        new_child=None
+
+                    previous_calls.append(child.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, max_depth, new_child, *args, **kwargs))
 
         fout = function(itself=self, children_outputs=previous_calls, node=current_node, **function_args)
         if isinstance(fout, tuple):
@@ -115,6 +154,7 @@ class Node:
             if current_node is not None:
                 current_node.setValue(fout, "Value")
                 current_node.setValue(cache, "Cache")
+
         return fout
 
 class CallableNode(Node):
@@ -133,16 +173,39 @@ class NaryNode(Node):
         super().__init__(location, framework)
         self.setOff()
 
-    def __call__(self, element):
+    def __call__(self, element, SpecificNode=None):
+        if SpecificNode is None:
+            SpecificNode = NaryNode
+
         self.setOn()
         self.setValue(element, "Value")
         for i in range(self.getValue("Nary")):
-            child = self.addChild(NaryNode)
-            #child.setOff()
+            self.addChild(SpecificNode)
+
+    def clearChildren(self, SpecificNode=None):
+        if not self.isActive():
+            return None
+
+        if SpecificNode is None:
+            SpecificNode = NaryNode
+
+        self.setChildren([])
+        for i in range(self.getValue("Nary")):
+            self.addChild(SpecificNode)
 
     def addChild(self, SpecificNode=None):
+        if not self.isActive():
+            return None
+
+        if SpecificNode is None:
+            SpecificNode = NaryNode
+
         if self.amountChildren() < self.getValue("Nary"):
-            return super().addChild(NaryNode)
+            return super().addChild(SpecificNode)
+
+class BinarySearchNode(NaryNode):
+    def __init__(self, location, framework):
+        super().__init__(location, framework)
 
     def add_element(self, element):
         if self.isActive():
@@ -152,7 +215,7 @@ class NaryNode(Node):
             elif c(element, self.getValue("Value")) > 0:
                 self.children[1].add_element(element)
         else:
-            self(element)
+            self(element, BinarySearchNode)
 
     def get_element(self, element):
         if self.isActive():
@@ -172,6 +235,7 @@ class Tree:
         self.value_framework = value_framework.copy()
         self.value_framework["Trigger"] = True
         self.value_framework["Type"] = ""
+        self.value_framework["Depth"] = 0
         self.main_node = SpecificNode(Location([]), self.value_framework)
 
     def findNode(self, location_raw):
@@ -181,7 +245,7 @@ class Tree:
     def reset(self):
         self.main_node.reset()
 
-    def recursiveCall(self, function, location_raw=[], function_args={}, filter_function=None, filtering_args={}, count_inactive=False):
+    def recursiveCall(self, function, location_raw=[], function_args={}, filter_function=None, filtering_args={}, count_inactive=False, max_depth=None):
         node = self.findNode(location_raw)
         cache_framework = {
             "Cache": None,
@@ -189,7 +253,19 @@ class Tree:
         }
         tree = Tree(cache_framework)
         current_node = tree.main_node
-        return node.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, current_node), tree
+        return node.recursive_call(function, function_args, filter_function, filtering_args, count_inactive, max_depth, current_node), tree
+
+    def recursiveCall_forward(self, function, initial_prop, location_raw=[], function_args={}, filter_function=None, filtering_args={}, count_inactive=False, max_depth=None):
+        node = self.findNode(location_raw)
+        cache_framework = {
+            "Cache": None,
+            "Value": None
+        }
+        tree = Tree(cache_framework)
+        current_node = tree.main_node
+        node.recursive_call_forward(function, initial_prop, function_args, filter_function, filtering_args,
+                                    count_inactive, max_depth, current_node)
+        return tree
 
     class Filtering:
         @staticmethod
@@ -203,20 +279,26 @@ class Tree:
     class Recursion:
 
         @staticmethod
-        def getLeafValues(keys, **kwargs):
+        def getLeafValues(keys, only_depth=None,**kwargs):
             node_obj = kwargs["itself"]
             children_outputs = kwargs["children_outputs"]
 
             dict_return = {}
             for key in keys:
                 if len(children_outputs) == 0:
-                    dict_return[key] = [node_obj.value[key]]
+                    if only_depth is None or node_obj.getValue("Depth") == only_depth:
+                        dict_return[key] = [node_obj.value[key]]
+                    else:
+                        return None
+
                 else:
                     values_list = []
                     for child_dict in children_outputs:
-                        values_list = values_list + child_dict[key]
+                        if child_dict is not None:
+                            values_list = values_list + child_dict[key]
 
                     dict_return[key] = values_list
+
 
             return dict_return
 
@@ -239,19 +321,6 @@ class Tree:
 
             return dict_return
 
-        @staticmethod
-        def getAmountChildren(**kwargs):
-            node_obj = kwargs["itself"]
-            children_outputs = kwargs["children_outputs"]
-
-            if len(children_outputs) == 0:
-                return 1
-            else:
-                value = 1
-                for val in children_outputs:
-                    value += val
-
-            return value
 
         @staticmethod
         def getAmountChildren(**kwargs):
@@ -375,10 +444,10 @@ class SequenceNode(Node):
 """
 
 class NaryTree(Tree):
-    def __init__(self, value_framework, n_value):
+    def __init__(self, value_framework, n_value, SpecificNode=NaryNode):
         self.n_value = n_value
         value_framework["Nary"] = n_value
-        super().__init__(value_framework, NaryNode)
+        super().__init__(value_framework, SpecificNode)
 
 class BinarySearchTree(NaryTree):
     def __init__(self, comparison):
@@ -386,7 +455,7 @@ class BinarySearchTree(NaryTree):
             "Function": comparison,
             "Value": None
         }
-        super().__init__(fw, 2)
+        super().__init__(fw, 2, BinarySearchNode)
 
     def addElements(self, elements):
         if isinstance(elements, list):
